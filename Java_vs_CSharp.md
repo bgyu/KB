@@ -172,3 +172,20 @@ Both Java and C# are powerful, mature languages with extensive ecosystems. The c
 - **C#**: Favored for Windows applications, gaming, cross-platform development with .NET Core, and web applications using ASP.NET Core.
 
 While the languages share many similarities, their ecosystems, platform integration, and specific language features cater to different development environments and needs.
+
+# Java and C# Syntax Comaprison
+### Summary of `final` in Java and its C# Equivalents:
+
+| Usage              | Java Keyword `final`          | C# Equivalent         |
+|--------------------|-------------------------------|-----------------------|
+| **Constant Variable** | `final` (for constants)       | `const` or `readonly` |
+| **Prevent Method Override** | `final` (on methods)        | `sealed` (on methods) |
+| **Prevent Class Inheritance** | `final` (on classes)        | `sealed` (on classes) |
+
+Each of these keywords is used to impose constraints on variables, methods, or classes, preventing modification or inheritance in both Java and C#.
+
+### Call base/super class method
+| Usage              | Java Keyword `super`          | C# Equivalent         |
+|--------------------|-------------------------------|-----------------------|
+| **Call base class method** | super.methodName()      | base.MethodName() |
+
