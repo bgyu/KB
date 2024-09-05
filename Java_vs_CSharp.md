@@ -206,6 +206,8 @@ Here’s an example in C#:
 
 ```csharp
 object obj = 3; // Integer (boxed)
+// Or
+// Object obj = 3; // In C# object = System.Object
 obj = "Hello";  // String
 ```
 
