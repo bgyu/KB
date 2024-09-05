@@ -189,3 +189,26 @@ Each of these keywords is used to impose constraints on variables, methods, or c
 |--------------------|-------------------------------|-----------------------|
 | **Call base class method** | super.methodName()      | base.MethodName() |
 
+### Java `Object` and C# `object`
+In Java, you can assign different types to the same variable (like assigning an `Integer` and then a `String` to `obj`). This is because `Object` is the superclass of all classes in Java. In other words, every class in Java implicitly inherits from `Object`, making `Object` a reference type that can hold any other type of object. Here's a step-by-step breakdown of why this works:
+
+1. **Polymorphism:** Java supports polymorphism, meaning a variable of type `Object` can refer to any object (since all objects are instances of a class that ultimately inherits from `Object`).
+   
+2. **Autoboxing:** When you assign an integer literal (`3`), it’s automatically "boxed" into an `Integer` object, because Java converts primitive types into their corresponding wrapper classes when needed (this is called autoboxing).
+
+3. **Reassignment:** Later, when you assign `"Hello"` to `obj`, you're simply replacing the reference to an `Integer` with a reference to a `String`, which is also a subclass of `Object`.
+
+Can C# do the same thing?
+
+Yes, C# can also do this using the `object` type, which is similar to Java's `Object`. In C#, `object` is the base class of all types (both value types and reference types), so you can assign any type to a variable of type `object`.
+
+Here’s an example in C#:
+
+```csharp
+object obj = 3; // Integer (boxed)
+obj = "Hello";  // String
+```
+
+C# also supports **boxing** (for value types like `int`) and **unboxing** (extracting the value type from the boxed object), similar to Java's autoboxing. So, you can assign an `int` to `obj`, and C# will box it into an `object`. Later, you can assign a different type like a `string` to the same `obj` variable, just like in Java.
+
+In both Java and C#, this is possible because of the common root `Object`/`object` class that every other class inherits from.
