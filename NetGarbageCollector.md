@@ -49,3 +49,117 @@ The Garbage Collector (GC) in .NET (5+) works in multiple **phases** to manage m
 8. **Full and LOH Collection** – Occasional full GC includes Generation 2 and LOH.
 
 These phases ensure that .NET efficiently manages memory while minimizing the impact on application performance.
+
+
+In the .NET runtime, the Garbage Collector (GC) operates as a complex, low-level system. Its implementation involves several major function calls in the native runtime libraries, particularly in the **CoreCLR** (Core Common Language Runtime). The function call paths are part of the internal workings of the GC, and while developers don't interact with them directly, understanding these paths helps in diagnosing performance issues or customizing the GC.
+
+Here’s an overview of the **major function call paths** involved in the GC implementation in .NET runtime (5+), based on the CoreCLR source code.
+
+### 1. **GC Initialization**
+   - The GC system is initialized when the runtime starts. This is done as part of the overall runtime initialization process.
+   - Major function calls:
+     - `EEStartupHelper()` – Initializes various components of the runtime, including the GC.
+     - `GCHeap::Initialize()` – Initializes the GC heap.
+     - `GCToOSInterface::Initialize()` – Sets up platform-specific details for the GC.
+     - `GCHeap::CreateGCHeap()` – Creates the instance of the garbage collector used throughout the application.
+
+### 2. **Object Allocation**
+   - Memory allocation for objects in .NET is handled by the GC, specifically for managed objects on the heap.
+   - Major function calls:
+     - `Alloc()` – The core allocation function that allocates memory for an object.
+     - `AllocLargeObject()` – Allocates large objects that are placed on the **Large Object Heap (LOH)**.
+     - `AllocSmallObject()` – Allocates smaller objects that fit within Generation 0.
+     - `GCHeap::Alloc()` – A higher-level allocation function that routes requests to the appropriate generation's allocator.
+
+### 3. **Triggering a Garbage Collection**
+   - Garbage collection is triggered when memory thresholds are exceeded, or when explicitly requested by the application using `GC.Collect()`.
+   - Major function calls:
+     - `GCHeap::GarbageCollect()` – The main entry point for triggering a collection.
+     - `GCHeap::GcCollect()` – Triggers a collection for a specific generation.
+     - `GCHeap::GcCollectGeneration()` – Collects objects from the specified generation.
+     - `GCToEEInterface::GcScanRoots()` – Scans the managed roots (e.g., stacks, statics, finalizable objects) to determine which objects are still reachable.
+
+### 4. **Mark Phase (Tracing Reachable Objects)**
+   - The Mark phase identifies objects that are reachable (i.e., still in use by the application) by traversing from the root set (globals, statics, stack objects).
+   - Major function calls:
+     - `GCHeap::MarkPhase()` – Marks reachable objects.
+     - `CNameSpace::MarkRoots()` – Marks objects starting from the roots.
+     - `GCHeap::MarkObject()` – Marks individual objects as reachable.
+     - `Object::MarkObject()` – Recursively marks objects referenced by other objects.
+     - `GCToEEInterface::Promote()` – Promotes references to higher generations for objects that survive collection.
+
+### 5. **Plan Phase (Planning Object Relocation)**
+   - After marking, the GC plans which objects to relocate (compact) to optimize memory usage.
+   - Major function calls:
+     - `GCHeap::PlanPhase()` – Plans the relocation of objects.
+     - `GCHeap::ComputeRelocation()` – Computes where objects will be moved in memory.
+     - `GCHeap::Relocate()` – Relocates marked objects to reduce fragmentation.
+     - `CFinalize::RelocateRoots()` – Updates the references for objects that are being relocated.
+
+### 6. **Relocate Phase (Compacting the Heap)**
+   - In compacting GCs, objects are moved to minimize fragmentation.
+   - Major function calls:
+     - `GCHeap::RelocatePhase()` – Performs the actual relocation of objects in the heap.
+     - `HeapSegment::Relocate()` – Handles object relocation within segments of the heap.
+     - `Object::Relocate()` – Moves individual objects in memory, adjusting their pointers.
+
+### 7. **Sweep Phase (Reclaiming Memory)**
+   - In the Sweep phase, memory occupied by unreachable objects is reclaimed.
+   - Major function calls:
+     - `GCHeap::SweepPhase()` – Reclaims memory used by unreachable objects.
+     - `HeapSegment::Sweep()` – Frees memory for objects in a specific heap segment.
+     - `LargeObjectHeap::Sweep()` – Special handling for large objects, reclaiming memory in the LOH.
+     - `FinalizeObject()` – Invokes finalizers for objects that need finalization before being reclaimed.
+
+### 8. **Finalization (Cleaning Up Resources)**
+   - Finalizers are invoked for objects that implement finalization, allowing them to clean up unmanaged resources before collection.
+   - Major function calls:
+     - `GCHeap::FinalizeObjects()` – Invokes finalizers for objects queued for finalization.
+     - `CFinalize::ProcessFinalizers()` – Manages the finalizer thread and invokes destructors.
+     - `Object::Finalize()` – Calls the finalizer of the object.
+
+### 9. **Promotion (Generation Management)**
+   - Objects that survive collection are promoted to higher generations to minimize the frequency of collection for long-lived objects.
+   - Major function calls:
+     - `GCHeap::Promote()` – Promotes objects that survive a collection to a higher generation.
+     - `GcGeneration::PromoteObject()` – Moves objects from Generation 0 to Generation 1, or from Generation 1 to Generation 2.
+
+### 10. **Concurrent and Background GC**
+   - In server and background modes, garbage collection can run concurrently with application execution to reduce pause times.
+   - Major function calls:
+     - `GCHeap::StartBackgroundGC()` – Starts a background GC process.
+     - `GCHeap::RunBackgroundGC()` – Executes the background garbage collection.
+     - `GCHeap::ConcurrentMarkPhase()` – Marks reachable objects concurrently while the application is running.
+     - `GCHeap::ConcurrentSweepPhase()` – Concurrently reclaims memory for unreachable objects.
+
+### 11. **Ephemeral and Full GC**
+   - **Ephemeral GC** focuses on short-lived objects in Generation 0 and Generation 1, while **Full GC** includes Generation 2 and the LOH.
+   - Major function calls:
+     - `GCHeap::CollectEphemeral()` – Collects objects in Generation 0 and Generation 1.
+     - `GCHeap::CollectFull()` – Collects objects across all generations, including Generation 2 and LOH.
+     - `GCHeap::CollectLargeObjectHeap()` – Collects objects in the Large Object Heap (LOH).
+
+### 12. **Final Phases (Updating References)**
+   - After collection, all references are updated to point to the new locations of objects that were relocated during the GC.
+   - Major function calls:
+     - `GCHeap::UpdatePointers()` – Updates references to relocated objects.
+     - `Object::UpdateReferences()` – Adjusts pointers for individual objects that were moved.
+     - `CNameSpace::UpdateRootPointers()` – Updates pointers from root objects to relocated objects.
+
+---
+
+### Summary of Major Function Call Paths in .NET GC:
+1. **Initialization**: `GCHeap::Initialize()`, `GCHeap::CreateGCHeap()`
+2. **Object Allocation**: `GCHeap::Alloc()`, `AllocSmallObject()`, `AllocLargeObject()`
+3. **Garbage Collection Trigger**: `GCHeap::GarbageCollect()`, `GCHeap::GcCollectGeneration()`
+4. **Mark Phase**: `GCHeap::MarkPhase()`, `GCHeap::MarkObject()`
+5. **Plan Phase**: `GCHeap::PlanPhase()`, `GCHeap::ComputeRelocation()`
+6. **Relocate Phase**: `GCHeap::RelocatePhase()`, `HeapSegment::Relocate()`
+7. **Sweep Phase**: `GCHeap::SweepPhase()`, `HeapSegment::Sweep()`
+8. **Finalization**: `GCHeap::FinalizeObjects()`, `CFinalize::ProcessFinalizers()`
+9. **Promotion**: `GCHeap::Promote()`, `GcGeneration::PromoteObject()`
+10. **Background/Concurrent GC**: `GCHeap::RunBackgroundGC()`, `GCHeap::ConcurrentMarkPhase()`
+11. **Ephemeral and Full GC**: `GCHeap::CollectEphemeral()`, `GCHeap::CollectFull()`
+12. **Updating References**: `GCHeap::UpdatePointers()`, `Object::UpdateReferences()`
+
+These paths provide a deep insight into the internal workings of the garbage collector in the .NET runtime, allowing for better understanding of how .NET manages memory and handles objects during runtime execution.
