@@ -6,7 +6,7 @@ The Garbage Collector (GC) in .NET (5+) works in multiple **phases** to manage m
    - As new objects are created, the available space in the heap decreases. When the heap is full or certain thresholds are exceeded, a garbage collection is triggered.
 
 ### 2. **Mark Phase (Marking Reachable Objects)**
-   - The GC starts by identifying **root objects**, which are directly referenced by application code, static variables, or stack variables.
+   - The GC starts by identifying **root objects**, which are **directly referenced by application code, static variables, or stack variables**.
    - From the root objects, the GC traces and marks all objects that are **reachable** (those directly or indirectly referenced by other objects).
    - Objects not marked as reachable are considered **garbage** and are candidates for collection.
    
