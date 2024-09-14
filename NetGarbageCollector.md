@@ -163,3 +163,205 @@ Here’s an overview of the **major function call paths** involved in the GC imp
 12. **Updating References**: `GCHeap::UpdatePointers()`, `Object::UpdateReferences()`
 
 These paths provide a deep insight into the internal workings of the garbage collector in the .NET runtime, allowing for better understanding of how .NET manages memory and handles objects during runtime execution.
+
+
+In .NET (5 and above), the **Garbage Collector (GC)** is responsible for automatically managing memory by determining which objects are no longer needed by the application and freeing up that memory space. Here's a detailed breakdown of how the GC determines when an object is no longer in use and how it handles memory cleanup:
+
+### 1. **Application Roots**
+When the GC runs, it first needs to figure out which objects are still in use by the application. This is done by examining the **application's roots**. The roots are key points in the application that can reference objects in memory. If an object is referenced by a root, it's considered "alive" (reachable), and the GC will not collect it. Here are the types of roots that the GC considers:
+
+- **Static fields**: These are variables defined with the `static` keyword in a class. Static variables are tied to the type itself rather than an instance of the class, meaning they persist for the entire lifetime of the application or the AppDomain. If a static field references an object, that object is considered "alive."
+
+- **Local variables on a thread's stack**: Each thread in your application has its own stack, where local variables are stored. If a method is running and has a local variable that references an object, the GC will treat that object as "alive" as long as the method is still executing and the variable is in scope.
+
+- **CPU registers**: The CPU registers are small, fast storage locations directly on the CPU. If an object reference happens to be stored in a CPU register (due to being actively used in computations), that object is also considered reachable.
+
+- **GC handles**: The runtime uses GC handles to manage special references that may require additional tracking, such as references to objects used in interop scenarios (calling unmanaged code) or when pinning objects in memory (e.g., objects passed to unmanaged code or objects that should not be moved during a GC cycle).
+
+- **Finalize queue**: This is a special queue used to manage objects that have a finalizer (i.e., a `Finalize()` method). The objects in this queue are waiting to have their finalizers called. As long as an object is in the finalize queue, the GC treats it as alive, even if no other references to it exist, so it doesn't get prematurely collected.
+
+### 2. **GC Collecting Roots**
+When the GC runs, it asks the **runtime (CLR)** to provide a list of all these roots. This is called **root enumeration**, where the GC collects all potential references from the application's roots to objects in memory.
+
+Each root will either:
+- **Reference an object on the managed heap** (where all .NET objects are stored), or
+- **Be set to null**, meaning it no longer references any object.
+
+### 3. **Graph of Reachable Objects**
+Once the GC has gathered the roots, it creates a **graph** of objects. This graph helps the GC figure out which objects are still in use and which are no longer reachable. Here’s how it works:
+
+- The GC starts from the roots and follows each reference to an object on the managed heap.
+- For each object it finds, it checks if that object has references to other objects (such as member variables or fields that are references to other objects). If so, the GC follows those references as well.
+- This process continues, forming a graph of **reachable objects**—all the objects that can be accessed directly or indirectly from the roots.
+
+Any object that cannot be reached from the roots (i.e., not part of this graph) is considered **unreachable** and is a candidate for garbage collection.
+
+### 4. **Mark-and-Sweep Process**
+Once the GC has identified which objects are reachable, it can perform the garbage collection process:
+- **Mark phase**: The GC marks all reachable objects as "alive" (or in-use) by traversing the graph it created from the roots.
+- **Sweep phase**: After the mark phase, the GC scans the managed heap to identify all objects that were not marked as reachable. These unmarked objects are considered **garbage** and can be reclaimed.
+
+### 5. **Generational Collection**
+.NET uses a **generational garbage collection** strategy, meaning that it organizes objects into three generations based on their age:
+- **Generation 0**: New objects that have just been created. These are collected most frequently.
+- **Generation 1**: Objects that survived one GC cycle.
+- **Generation 2**: Long-lived objects that survived multiple GC cycles. These are collected the least frequently.
+
+The GC typically focuses on **Generation 0**, since newly created objects are more likely to become unreachable quickly (this is called the "weak generational hypothesis"). If an object survives a collection in Generation 0, it moves to Generation 1, and so on.
+
+### Summary of the Process:
+1. The GC starts by requesting the runtime to provide all the application's roots (static fields, thread-local variables, etc.).
+2. It builds a graph of all reachable objects by traversing references starting from these roots.
+3. Any object not part of this graph is considered unreachable and is a candidate for collection.
+4. The GC marks the reachable objects and reclaims the memory occupied by the unreachable ones.
+
+By automatically managing memory this way, the GC helps developers avoid memory leaks and manual memory management while ensuring efficient use of system resources.
+
+
+Sure! Let’s go over examples of each type of **application root** in a .NET (C#) program.
+
+### 1. **Static Fields**
+Static fields are variables that belong to the type itself rather than to any specific instance. Since static fields are tied to the class and persist for the lifetime of the application or AppDomain, objects they reference are considered as "roots."
+
+```csharp
+public class ExampleClass
+{
+    // Static field
+    public static string StaticMessage = "This is a static field.";
+}
+
+public class Program
+{
+    public static void Main()
+    {
+        // The static field `StaticMessage` is an application root.
+        Console.WriteLine(ExampleClass.StaticMessage);
+    }
+}
+```
+
+In this case, `StaticMessage` is a static field, and the string it references will remain in memory until the application terminates.
+
+---
+
+### 2. **Local Variables on a Thread's Stack**
+Local variables declared inside methods are stored on a thread's stack. If these local variables reference objects, those objects are considered live until the method completes or the variable goes out of scope.
+
+```csharp
+public class Program
+{
+    public static void Main()
+    {
+        // Local variable on the thread's stack
+        string localMessage = "This is a local variable.";
+        
+        // As long as this method is executing, `localMessage` is an application root.
+        Console.WriteLine(localMessage);
+    }
+}
+```
+
+Here, `localMessage` is a local variable on the stack. The string it references remains reachable as long as the method is executing and `localMessage` is in scope.
+
+---
+
+### 3. **CPU Registers**
+When a method or function is executing, the runtime may store certain values, including object references, in CPU registers for faster access. While these references are stored in registers, the objects they point to are considered "alive."
+
+However, you can't explicitly code for the use of CPU registers in C#. The runtime manages this. Here's an indirect example:
+
+```csharp
+public class Program
+{
+    public static void Main()
+    {
+        // This string may be referenced by a CPU register during execution.
+        string message = "Stored in a CPU register temporarily.";
+
+        // Depending on optimizations, `message` may be stored in a CPU register.
+        Console.WriteLine(message);
+    }
+}
+```
+
+While you don't control what gets stored in the CPU registers, any object temporarily referenced in a register (e.g., the `message` variable) will be considered as rooted during its use.
+
+---
+
+### 4. **GC Handles**
+GC handles are special types of references used in scenarios like interop or pinning objects in memory. For example, when dealing with unmanaged code (such as P/Invoke or COM interop), you might create a GC handle to ensure the object is not garbage collected while it’s in use by unmanaged code.
+
+```csharp
+using System;
+using System.Runtime.InteropServices;
+
+public class Program
+{
+    public static void Main()
+    {
+        // Create an object
+        string message = "Pinned by GCHandle";
+        
+        // Pin the object in memory using a GC handle
+        GCHandle handle = GCHandle.Alloc(message, GCHandleType.Pinned);
+        
+        // The object is now rooted and won't be collected by the GC.
+        Console.WriteLine("Object is pinned: " + (handle.IsAllocated ? "Yes" : "No"));
+        
+        // Free the handle
+        handle.Free();
+    }
+}
+```
+
+In this example, the string `message` is pinned in memory using a `GCHandle`. While the handle is allocated, the GC considers the `message` object as live.
+
+---
+
+### 5. **Finalize Queue**
+Objects that have a `Finalize()` method (destructor) are added to the **finalize queue** when they become unreachable. These objects are rooted until their `Finalize()` method has been called, even if no other references to them exist.
+
+```csharp
+public class FinalizableClass
+{
+    // Finalizer (called when object is about to be collected)
+    ~FinalizableClass()
+    {
+        Console.WriteLine("Finalize method called!");
+    }
+}
+
+public class Program
+{
+    public static void Main()
+    {
+        // Create an instance of the finalizable class
+        FinalizableClass obj = new FinalizableClass();
+        
+        // obj is added to the finalization queue when it goes out of scope
+        // It remains in memory until the finalizer is called.
+        obj = null;
+
+        // Force garbage collection to trigger finalization
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+
+        Console.WriteLine("End of Main");
+    }
+}
+```
+
+In this example, even after setting `obj` to `null`, the object remains in memory because it’s in the **finalize queue** waiting for its `Finalize()` method to be called. Once the finalizer runs, the object can be collected.
+
+---
+
+### Summary
+
+- **Static Fields**: Variables tied to a class, persist throughout the application's lifetime.
+- **Local Variables on a Thread’s Stack**: Temporary variables used within methods, stay alive as long as the method is active.
+- **CPU Registers**: Temporary storage of object references during execution, handled by the runtime.
+- **GC Handles**: Special references used in unmanaged code or for pinning objects.
+- **Finalize Queue**: Objects with destructors remain alive until their `Finalize()` method is called.
+
+Each of these "roots" can reference objects, making them reachable by the garbage collector. If an object isn't reachable through any root, it becomes eligible for garbage collection.
+
