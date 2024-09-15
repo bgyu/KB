@@ -7,3 +7,7 @@
 * [Compare GC between Java and .NET](GC_Java_vs_Net.md)
 
 * [Compare Kotin with Groovy](Kotlin_vs_Groovy.md)
+
+* [.NET GC](NetGarbageCollector.md)
+* [.NET IDisposable Pattern](IDisposablePattern.md)
+  
