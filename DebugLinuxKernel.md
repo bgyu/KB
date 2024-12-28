@@ -269,3 +269,63 @@ qemu-system-x86_64 -kernel arch/x86_64/boot/bzImage -s -S -append "nokaslr root=
 
 This approach creates a minimal real filesystem that the kernel can mount as `/`. It avoids using `initramfs` entirely, relying instead on a block device (`filesystem.img`) to serve as the root filesystem.
 Also when you type `exit` in the console, the kernel won't panic like initramfs, you can press Enter to go to shell.
+
+# Use VS Code To Debug Linux Kernel
+### .vscode/tasks.json
+```json
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Start VM",
+        "type": "shell",
+        // qemu-system-x86_64 -kernel arch/x86_64/boot/bzImage -s -S -append "nokaslr root=/dev/sda rw console=ttyS0" -drive file=filesystem.img,format=raw,if=ide -nographic
+        "command": "qemu-system-x86_64",
+        "args": [
+          "-kernel", "arch/x86_64/boot/bzImage",
+          "-s", "-S", 
+          "-append",
+           //"nokaslr root=/dev/sda rw console=ttyS0",
+           "nokaslr root=/dev/sda rw console=ttyS0 init=/init loglevel=8",
+          "-drive",
+          "file=filesystem.img,format=raw,if=ide",
+          "-nographic"
+        ]
+      }
+    ]
+}
+```
+NOTE: `loglevel=8` make sure KERN_DEBUG message show as well.
+
+### .vscode/launch.json
+```json
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Debug Linux Kernel with GDB",
+        "type": "cppdbg",
+        "request": "launch",
+        "program": "${workspaceFolder}/vmlinux",
+        "cwd": "${workspaceFolder}",
+        "preLaunchTask": "Start VM",
+        "miDebuggerPath": "/usr/bin/gdb",
+        "setupCommands": [
+          {
+            "description": "Enable GDB pretty printing",
+            "text": "-enable-pretty-printing",
+            "ignoreFailures": true
+          }
+        ],
+        "miDebuggerArgs": "-ex 'target remote :1234'",  // Connect to QEMU's gdbserver
+        "stopAtEntry": false
+      }
+    ]
+  }
+```
+
+### F5 to Debug
+Before debugging, set some break points, for example, set a breakpoint in function `start_kernel`, then press F5 to start.
+NOTE: `Start VM` task will never exit. After a few seconds, VS code debug launcher will prompt "Waiting for preLaunchTask", just lick "Debug Anyway" to continue.
+To see the kernel output, you need switch to "Start VM Task" console window.
+
