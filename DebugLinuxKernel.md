@@ -260,6 +260,10 @@ qemu-system-x86_64 -kernel arch/x86_64/boot/bzImage -s -S -append "nokaslr root=
 
 - `root=/dev/sda`: Specifies the root filesystem is on `/dev/sda`.
 - `-drive`: Passes the disk image to QEMU as a virtual block device.
+We actually didn't use `init` from step 4, instead `/sbin/init` from busybox used. To use our customized `init` and see the message "Welcome to the minimal real filesystem!" in the kernel output, we need to specify `init` parameter:
+```bash
+qemu-system-x86_64 -kernel arch/x86_64/boot/bzImage -s -S -append "nokaslr root=/dev/sda rw init=/init console=ttyS0" -drive file=filesystem.img,format=raw,if=ide -nographic
+```
 
 ---
 
