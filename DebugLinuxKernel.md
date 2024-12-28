@@ -43,7 +43,7 @@ Note: If you start qemu in nographic mode, you need to specify "console" paramet
 
 ### Important parameters for debugging
 * `-s`: Starts a GDB server on port 1234
-* `-S`: Stops the CPU at startup unit GDB continues execution
+* `-S`: Stops the CPU at startup until GDB continues execution
 * `nokaslr`: a kernel boot parameter used to disable Kernel Address Space Layout Randomization (KASLR). `KASLR` is a security feature. We need to disable it so that the breakpoint works.
 
 ## Start gdb to debug the kernel
