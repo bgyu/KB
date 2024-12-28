@@ -61,7 +61,7 @@ You should be able to see the output when the line gets executed.
 * https://docs.kernel.org/dev-tools/gdb-kernel-debugging.html
 * https://github.com/torvalds/linux
 
-# Futher: Fix Kernel Panic by Providing rootfs
+# Futher: Fix Kernel Panic by Providing rootfs - Use initramfs
 Because we don't provide rootfs, kernel will panic at the end. To have a "complete" system, we need to provide a rootfs. Here are the detailed steps:
 
 Creating a minimal root filesystem using `busybox` and passing it to the Linux kernel involves the following steps:
@@ -161,3 +161,102 @@ Use the `rootfs.img` as the `initramfs` when booting the kernel in QEMU:
 - This setup creates a very minimal environment. You can add more binaries, libraries, or configurations as needed for your specific use case.
 - Test thoroughly with QEMU to ensure the kernel boots successfully with the new root filesystem.
 
+# Futher: Fix Kernel Panic by Providing rootfs - Use real root filesystem
+To create a **minimal real filesystem** instead of using an `initramfs`. This involves creating a disk image, formatting it with a filesystem (e.g., `ext4`), and populating it with the required files and directories. This disk image can then be passed to the Linux kernel via QEMU as a block device (`-drive` option) to be mounted as the root filesystem.
+
+Here's how to do it step-by-step:
+
+---
+
+### **Step 1: Create a Disk Image**
+1. **Create an Empty Disk Image**:
+   ```bash
+   dd if=/dev/zero of=filesystem.img bs=1M count=64
+   ```
+   - `filesystem.img`: Name of the disk image.
+   - `bs=1M count=64`: Creates a 64MB disk image (adjust size as needed).
+
+2. **Format the Disk Image with a Filesystem**:
+   ```bash
+   mkfs.ext4 filesystem.img
+   ```
+
+---
+
+### **Step 2: Mount the Disk Image**
+1. **Create a Mount Point**:
+   ```bash
+   mkdir mnt
+   ```
+
+2. **Mount the Disk Image**:
+   Use `loop` to mount the image:
+   ```bash
+   sudo mount -o loop filesystem.img mnt
+   ```
+
+---
+
+### **Step 3: Populate the Filesystem**
+1. **Set Up Basic Directories**:
+   Create essential directories inside the mounted image:
+   ```bash
+   sudo mkdir -p mnt/bin mnt/sbin mnt/usr/bin mnt/usr/sbin mnt/dev mnt/proc mnt/sys mnt/tmp mnt/etc mnt/lib mnt/lib64 mnt/root
+   sudo chmod 1777 mnt/tmp  # Make /tmp writable
+   ```
+
+2. **Copy BusyBox**:
+   Install `busybox` into the filesystem:
+   ```bash
+   sudo cp /usr/bin/busybox mnt/bin/
+   ```
+
+3. **Set Up Symlinks for BusyBox**:
+   Create symlinks for `busybox` commands:
+   ```bash
+   sudo chroot mnt /bin/busybox --install -s
+   ```
+
+4. **Create the `init` Script**:
+   Create an `init` script for the root filesystem:
+   ```bash
+   sudo bash -c 'cat > mnt/init <<EOF
+   #!/bin/sh
+   mount -t proc none /proc
+   mount -t sysfs none /sys
+   echo "Welcome to the minimal real filesystem!"
+   exec /bin/sh
+   EOF'
+   sudo chmod +x mnt/init
+   ```
+
+5. **Create Device Nodes**:
+   Use `mknod` to create basic device nodes:
+   ```bash
+   sudo mknod mnt/dev/null c 1 3
+   sudo mknod mnt/dev/console c 5 1
+   ```
+
+---
+
+### **Step 4: Unmount the Disk Image**
+Once the filesystem is set up:
+```bash
+sudo umount mnt
+```
+
+---
+
+### **Step 5: Boot the Kernel with the Real Filesystem**
+Use QEMU to boot the kernel and specify the disk image as the root filesystem:
+```bash
+qemu-system-x86_64 -kernel arch/x86_64/boot/bzImage -append "root=/dev/sda rw console=ttyS0" -drive file=filesystem.img,format=raw,if=ide -nographic
+```
+
+- `root=/dev/sda`: Specifies the root filesystem is on `/dev/sda`.
+- `-drive`: Passes the disk image to QEMU as a virtual block device.
+
+---
+
+This approach creates a minimal real filesystem that the kernel can mount as `/`. It avoids using `initramfs` entirely, relying instead on a block device (`filesystem.img`) to serve as the root filesystem.
+Also when you type `exit` in the console, the kernel won't panic like initramfs, you can press Enter to go to shell.
