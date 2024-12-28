@@ -27,7 +27,7 @@ Add the following configuration to *~/.gdbinit*:
 ```
 add-auto-load-safe-path <path-to-linux-kernel>
 ```
-Replace "<path-to-linux-kernel>" to the actual linux kernel path.
+Replace `<path-to-linux-kernel>` to the actual linux kernel path.
 
 # Debug Linux Kernel
 ## Start new built kernel with qemu
