@@ -41,6 +41,11 @@ qemu-system-x86_64 -kernel arch/x86_64/boot/bzImage -s -S -append "nokaslr conso
 This will start the new kernel with qemu and waiting for debugger to connect.
 Note: If you start qemu in nographic mode, you need to specify "console" parameters, otherwise you won't see any output.
 
+### Import parameters for debugging
+* `-s`: Starts a GDB server on port 1234
+* `-S`: Stops the CPU at startup unit GDB continues execution
+* `nokaslr`: a kernel boot parameter used to disable Kernel Address Space Layout Randomization (KASLR). `KASLR` is a security feature. We need to disable it so that the breakpoint works.
+
 ## Start gdb to debug the kernel
 ```
 gdb vmlinux  # start the kernel with gdb
@@ -250,7 +255,7 @@ sudo umount mnt
 ### **Step 5: Boot the Kernel with the Real Filesystem**
 Use QEMU to boot the kernel and specify the disk image as the root filesystem:
 ```bash
-qemu-system-x86_64 -kernel arch/x86_64/boot/bzImage -append "root=/dev/sda rw console=ttyS0" -drive file=filesystem.img,format=raw,if=ide -nographic
+qemu-system-x86_64 -kernel arch/x86_64/boot/bzImage -s -S -append "nokaslr root=/dev/sda rw console=ttyS0" -drive file=filesystem.img,format=raw,if=ide -nographic
 ```
 
 - `root=/dev/sda`: Specifies the root filesystem is on `/dev/sda`.
