@@ -19,3 +19,5 @@
 
 ## Linux Kernel
 * [Debug Linux Kernel](DebugLinuxKernel.md)
+* [Linux Kerenl Parameters](LinuxKernelParameters.md)
+* [Create Simple Linux Distro](SimpleLinuxDistro.md)
