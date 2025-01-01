@@ -1,78 +1,91 @@
-# Create a simple Linux Distro
+# Build a minimu Linux System 
 
-### Three major components for a simple Linux Distro
-* Bootloader: Boots Linux Kernel
-* Linux Kernel: The Linux Kernel Itself
-* Init: First user process
+Building a minimum Linux system that can be booted using QEMU involves creating a small root filesystem, configuring the kernel boot parameters, and running the system in QEMU. Below are the detailed steps:
 
-### Prerequistes
-* You have a ready to use Linux system, VM, container or a real system whatever
-* Install docker or podman
-We don't want to affect the current system, so we make everything inside a container.
-Assume you are using `podman`, if you are using `docker`, you can just create an alias: `alias podman=docker`.
+### 1. **Setup Environment**
+Make sure you have the following installed on your host system:
+- QEMU
+- GNU Core Utilities (for building the root filesystem)
+- BusyBox
+- A Linux kernel bzImage
+- Cross-compiler (if building for a different architecture)
 
-### Step by Step Guide
-#### Clone Linux Kernel And Compile the Kernel
+### 2. **Create a Root Filesystem**
+#### 2.1 Prepare Directory Structure
+```bash
+mkdir -p rootfs/{bin,sbin,etc,proc,sys,dev,tmp,var,mnt,lib,usr/{bin,sbin}}
 ```
-podman run -it ubuntu  # Start the container
-```
-Now we are inside the container `Ubuntu` system with root account:
-```
-# Install required tools
-apt install -y bzip2 git vim make gcc libncurses-dev flex bison bc cpio libelf-dev libssl-dev dosfstools busybox syslinux
 
-# Clone linux Kernel
-mkdir /source
-cd /source
-git clone --depth 1 https://github.com/torvalds/linux.git
-cd linux
+#### 2.2 Compile and Install BusyBox
+BusyBox provides minimal versions of standard Unix utilities.
+```bash
+wget https://busybox.net/downloads/busybox-<version>.tar.bz2
+tar xjf busybox-<version>.tar.bz2
+cd busybox-<version>
 make defconfig
-make -j $(nproc)
-
-# Create a new folder distro
-mkdir /distro
-# Copy the new built kernel
-cp arch/x86_64/boot/bzImage /distro/
+make -j$(nproc)
+make install CONFIG_PREFIX=../rootfs
+cd ..
 ```
 
-### Create File system (initramfs)
+#### 2.3 Configure `/init`
+Create an `init` script that acts as the init system:
+```bash
+cat > rootfs/init << EOF
+#!/bin/sh
+mount -t proc none /proc
+mount -t sysfs none /sys
+echo "Welcome to the minimal Linux system!"
+/bin/sh
+EOF
+chmod +x rootfs/init
 ```
-mkdir /distro/initramfs
-cd /distro/initramfs
-mkdir -p bin sbin usr/bin usr/sbin
-cp /usr/bin/busybox ./bin/
 
-cd bin
-for cmd in $(./busybox --list); do
-    ln -s busybox $cmd
-done
+#### 2.4 Create Device Nodes
+```bash
+mknod rootfs/dev/console c 5 1
+mknod rootfs/dev/null c 1 3
+```
 
-cd .. # /distro/initramfs
-mkdir - dev proc sys tmp etc lib lib64 mnt root
-chmod 1777 tmp
+---
 
-# Create rootfs (initramfs)
-find . | cpio -o --format newc | gzip > ../initramfs.img
+### 3. **Prepare Root Filesystem Image**
+#### 3.1 Create a CPIO Archive
+```bash
+cd rootfs
+find . | cpio -o --format=newc > ../rootfs.cpio
+cd ..
 ```
-### Create bootable disk
+
+#### 3.2 Compress the Archive (Optional)
+```bash
+gzip rootfs.cpio
 ```
-cd /distro
-dd if=/dev/zero of=mylinux.img bs=1M count=50  # Create virtual disk
-mkfs -t fat mylinux.img # format the disk
-syslinux mylinux.img # install bootloader to the disk
+
+---
+
+### 4. **Run with QEMU**
+#### 4.1 Command to Boot
+Replace `<path_to_bzImage>` and `<path_to_rootfs.cpio.gz>` with appropriate paths:
+```bash
+qemu-system-x86_64 \
+    -kernel <path_to_bzImage> \
+    -initrd <path_to_rootfs.cpio.gz> \
+    -append "console=ttyS0" \
+    -nographic
 ```
-### Copy Kernel to the bootable disk
-Becasue we don't have permission (with rootless podman) to mount inside the container,
-we need to copy everything out from the container and mount mylinux.img and then copy the Linux kernel.
-Assuming the container Id is 7aedd9f76764. You can get it with `podman ps`.
-In a new terminal:
-```
-podman ps -- get container id
-# Copy the whole distro folder to podman machine
-podman cp 7aedd9f76764:/distro .
-cd ./distro
-mkdir mnt
-sudo mount mylinux.img ./mnt
-sudo cp bzImage initramfs.img ./mnt  # Copy Linux Kernel to the bootable disk
-sudo umount mnt
-```
+
+#### 4.2 Explanation
+- `-kernel`: Specifies the kernel image to boot.
+- `-initrd`: Specifies the initial root filesystem.
+- `-append "console=ttyS0"`: Directs kernel logs to the serial console.
+- `-nographic`: Runs QEMU in headless mode.
+
+---
+
+### 5. **Testing and Debugging**
+- If the system boots successfully, you should see a shell prompt.
+- If there are errors, check the following:
+  - Device nodes in `/dev`.
+  - Correctly mounted `/proc` and `/sys`.
+  - Kernel logs for missing modules or configuration.
